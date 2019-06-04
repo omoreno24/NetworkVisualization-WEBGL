@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WEBGL Test</title>
+    <link rel="stylesheet" href="./lib/bootstrap/css/bootstrap.min.css">
+    <link rel="stylesheet" href="./lib/font-awesome/css/font-awesome.min.css">
+    <style>
+        body { margin:0; overflow:hidden;}
+        canvas { width: 100%; height: 100% }
+        
+        #graphic-legend{
+            position: absolute;
+            left: 10px;
+            top: 10px;
+            z-index: 99999999;
+            width: 198px;
+        }
+        #graphic-legend ul li{
+            padding-top: 0.25rem;
+            display: flex;
+            justify-content: space-between;
+        }
+        #graphic-legend ul li span
+        {
+            padding: 0.20rem;
+            width: 30px;
+            border-radius: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div id="graphic-legend" class="card shadow col-md-2">
+        <ul class="list-group list-group-flush">
+        </ul>
+    </div>
+    <script type="text/javascript" src="lib/threejs/three.js"></script>
+    <script type="text/javascript" src="lib/threejs/OrbitControls.js"></script>
+    <script type="text/javascript" src="lib/threejs/Projector.js"></script>
+    <script type="text/javascript" src="lib/threejs/SVGRenderer.js"></script>
+    <script type="text/javascript" src="js/graph.js"></script>
+    <script type="text/javascript" src="js/circularGraph.js"></script>
+    <script type="text/javascript">
+
+        var graph = null;
+
+        //loading of the csv data from file
+        fetch( './resources/samplepcap.csv' ).then( response => response.text( ) ).then( text => {
+            let nodes = [ ];
+            let links = [ ];
+
+            let result = text.split( '\r' );
+
+            result.shift( ); //delete the header row
+
+            result = result.map( row => row.split( ',' ) ); //return array[ n ] [ 3 ]
+            
+            links = result.map( row => {
+                if( nodes[ row[ 0 ] ] == undefined )
+                {
+                    nodes[ row[ 0] ] =  new Node( row[ 0 ] ); //source
+                }
+                
+                if( nodes[ row[ 1 ] ] == undefined )
+                {
+                    nodes[ row[ 1 ] ] =  new Node( row[ 1 ] ); //destination
+                }
+
+                // new Link ( source, target, protocol )
+                return new Link(nodes[row[0]], nodes[row[1]], row[2]);
+            });
+
+            nodes = Object.values(nodes); //return array of nodes
+            
+            //CircularGraph( nodeDiameter, paceBetweenNodes, nodes, links)
+            graph = new CircularGraph( 4, 1, nodes, links );
+
+            //generates all elements of the graph and ads it to the scene
+            graph.generate(scene).then(elements =>{
+                elements.forEach(element=>scene.add(element));
+            });
+        });
+        
+        /** THREE.js SETTUP**/
+        var viewSize = 400;
+        
+        var aspecRation = window.innerWidth / window.innerHeight;
+
+        var camera = new THREE.OrthographicCamera( aspecRation * viewSize / -2, aspecRation * viewSize / 2,  viewSize / 2, viewSize / - 2, -1000, 1000 );
+        var renderer = new THREE.WebGLRenderer( { antialias: true} );
+
+        renderer.setSize( window.innerWidth, window.innerHeight );
+        document.body.appendChild( renderer.domElement );
+
+        var scene = new THREE.Scene( );
+
+        var control = new THREE.OrbitControls( camera );
+        control.screenSpacePanning = true;
+		
+        window.addEventListener( "resize", ( )=> {
+            requestAnimationFrame( ( ) => {
+                var [ width, height ] = [ window.innerWidth, window.innerHeight ];
+                aspecRation = width / height;
+                camera.left = aspecRation * viewSize / -2;
+                camera.right = aspecRation * viewSize / 2;
+                camera.top =  viewSize / 2;
+                camera.bottom =  viewSize / -2;
+
+                camera.updateProjectionMatrix( );
+                renderer.setSize( width, height );
+            });
+        });
+        /**END OF THREE.JS SETUP**/
+        
+        //Transofrm position from webgl to document space position
+        window.WebglToDocumentPosition = ( position ) => {
+            var width = window.innerWidth, height = window.innerHeight;
+            var widthHalf = width / 2, heightHalf = height / 2;
+
+            var pos = position.clone( );
+            pos.project( camera );
+
+            pos.x = ( pos.x * widthHalf ) + widthHalf;
+            pos.y = - ( pos.y * heightHalf ) + heightHalf;
+
+            return pos;
+        }
+
+        //RenderLoop
+        var updateRendering = function ( ) {
+            requestAnimationFrame( updateRendering );
+            control.update();
+            
+            if(graph != null) graph.UpdateIndicators();
+            
+            renderer.render( scene, camera );
+		};
+    
+        updateRendering( );
+    </script>
+</body>
+</html>
